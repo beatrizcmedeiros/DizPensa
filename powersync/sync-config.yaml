@@ -1,0 +1,46 @@
+# Regras de sincronização do PowerSync (Sync Streams).
+# Cole este conteúdo no painel do PowerSync (Sync Streams / sync config) e faça o deploy.
+# Cada pessoa recebe só os dados das casas de que é membro.
+config:
+  edition: 3
+
+streams:
+  casas:
+    auto_subscribe: true
+    query: SELECT * FROM households WHERE id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  membros:
+    auto_subscribe: true
+    query: SELECT * FROM household_members WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  categorias:
+    auto_subscribe: true
+    query: SELECT * FROM categories WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  produtos:
+    auto_subscribe: true
+    query: SELECT * FROM products WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  variantes:
+    auto_subscribe: true
+    query: SELECT * FROM product_variants WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  compras:
+    auto_subscribe: true
+    query: SELECT * FROM purchases WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  itens_compra:
+    auto_subscribe: true
+    query: SELECT * FROM purchase_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  lotes:
+    auto_subscribe: true
+    query: SELECT * FROM stock_lots WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  movimentos:
+    auto_subscribe: true
+    query: SELECT * FROM stock_movements WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())
+
+  lista_compras:
+    auto_subscribe: true
+    query: SELECT * FROM shopping_list_items WHERE household_id IN (SELECT household_id FROM household_members WHERE user_id = auth.user_id())

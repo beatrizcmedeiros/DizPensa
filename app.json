@@ -1,16 +1,14 @@
 {
   "expo": {
-    "name": "Despensa",
-    "slug": "Despensa",
+    "name": "DizPensa",
+    "slug": "dizpensa",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "despensa",
+    "scheme": "dizpensa",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/expo.icon"
-    },
     "android": {
+      "package": "com.dizpensa.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -19,16 +17,12 @@
       },
       "predictiveBackGestureEnabled": false
     },
-    "web": {
-      "output": "server",
-      "favicon": "./assets/images/favicon.png"
-    },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#208AEF",
+          "backgroundColor": "#2F7D4F",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }

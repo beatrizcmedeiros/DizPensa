@@ -1,56 +1,91 @@
-# Welcome to your Expo app 👋
+# DizPensa
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+App Android (React Native + Expo) para controlar a despensa da casa, compartilhada entre os moradores e funcionando offline.
 
-## Get started
+- **App:** Expo SDK 58, Expo Router, TypeScript
+- **Banco local:** SQLite via PowerSync (funciona sem internet)
+- **Nuvem:** Supabase (login, Postgres, permissões) + PowerSync (sincronização)
 
-1. Install dependencies
+## Fases
 
-   ```bash
-   npm install
-   ```
+| Fase | Conteúdo | Situação |
+|---|---|---|
+| 1 | Login, casa compartilhada, despensa, cadastro manual, baixa, categorias, duração | **feita** |
+| 2 | Leitura do QR da NFC-e (MG), padronização de nomes com IA, tela de revisão | a fazer |
+| 3 | Ajustes de compartilhamento (sair da casa, remover membro) | a fazer |
+| 4 | Lista de compras, relatórios e filtros | a fazer |
+| 5 | Publicação na Play Store | a fazer |
 
-2. Start the app
+## Como as coisas funcionam
 
-   ```bash
-   npx expo start
-   ```
+- **Produto** é o item genérico ("Arroz branco"). A **marca** fica numa variante, então marcas diferentes se agrupam no mesmo produto.
+- Produtos são contados **por embalagem** ou **por peso (kg)**, escolhido no cadastro.
+- Cada entrada cria um **lote**. A baixa consome o lote mais antigo primeiro. Quando um lote zera, a data é registrada e o app calcula **quanto tempo durou**.
+- Tudo é gravado primeiro no aparelho. O PowerSync envia para o Supabase quando há internet e traz as alterações das outras pessoas da casa.
 
-In the output, you'll find options to open the app in a
+## Estrutura
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```
+src/app/                 telas (cada arquivo é uma rota)
+  _layout.tsx            decide entre login / criar casa / app
+  (tabs)/index.tsx       despensa
+  (tabs)/casa.tsx        casa, convite, membros, sair
+  produto/novo.tsx       cadastro manual / entrada no estoque
+  produto/[id].tsx       detalhe, baixa, duração, preço, histórico
+  categorias.tsx
+src/lib/
+  powersync/schema.ts    tabelas do banco local
+  powersync/connector.ts envio das alterações para o Supabase
+  stock.ts               regras de entrada e baixa
+supabase/migrations/     SQL do banco na nuvem
+powersync/sync-config.yaml  o que cada pessoa recebe na sincronização
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+## Configuração (uma vez)
 
-### Other setup steps
+### 1. Node 24
+O Expo 58 exige Node 22.13+ ou 24. Você tem o 24 instalado no nvm:
+```bash
+nvm use 24.21.0
+```
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+### 2. Supabase
+1. Crie um projeto em https://supabase.com (região São Paulo).
+2. Abra o **SQL Editor**, cole o conteúdo de `supabase/migrations/0001_inicial.sql` e rode.
+3. Crie o usuário que o PowerSync usa para ler o banco (troque a senha):
+   ```sql
+   create role powersync_role with replication bypassrls login password 'TROQUE_ESTA_SENHA';
+   grant select on all tables in schema public to powersync_role;
+   ```
+4. Em **Authentication > Sign In / Providers > Email**, deixe o login por e-mail ligado.
+   Durante o desenvolvimento, desligar **Confirm email** facilita os testes.
 
-## Learn more
+### 3. PowerSync
+1. Crie uma conta em https://www.powersync.com e uma instância.
+2. Conecte ao Postgres do Supabase (Supabase > **Connect** > connection string direta), usando o usuário `powersync_role`.
+3. Ative a autenticação do **Supabase Auth** na instância.
+4. Cole o conteúdo de `powersync/sync-config.yaml` na configuração de Sync Streams e faça o deploy.
 
-To learn more about developing your project with Expo, look at the following resources:
+### 4. Variáveis de ambiente
+Copie `.env.example` para `.env` e preencha a URL e a publishable key do Supabase e a URL da instância do PowerSync.
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 5. Rodar no Android
+O PowerSync usa código nativo, então **o app não roda no Expo Go**. É preciso um *development build*:
 
-## Join the community
+- **Celular por USB ou emulador** (você já tem o Android SDK):
+  ```bash
+  npx expo run:android
+  ```
+  Se reclamar do SDK, defina `ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk`.
+- **Na nuvem do Expo** (gera um APK para instalar no celular):
+  ```bash
+  npx eas-cli@latest build --profile development --platform android
+  ```
 
-Join our community of developers creating universal apps.
+Depois do primeiro build, `npx expo start` basta para continuar desenvolvendo.
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+## Comandos úteis
+```bash
+npx tsc --noEmit   # checa os tipos
+npx expo-doctor    # checa dependências
+```

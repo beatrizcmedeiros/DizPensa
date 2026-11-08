@@ -1,42 +1,37 @@
-/**
- * Below are the colors that are used in the app. The colors are defined in the light and dark mode.
- * There are many other ways to style your app. For example, [Nativewind](https://www.nativewind.dev/), [Tamagui](https://tamagui.dev/), [unistyles](https://unistyl.es/), etc.
- */
-
-import '@/global.css';
-
 import { Platform } from 'react-native';
 
 export const Colors = {
   light: {
-    text: '#000000',
-    background: '#ffffff',
-    backgroundElement: '#F0F0F3',
-    backgroundSelected: '#E0E1E6',
-    textSecondary: '#60646C',
+    text: '#1B1F1C',
+    textSecondary: '#5E665F',
+    background: '#FAFAF7',
+    backgroundElement: '#EFF1EC',
+    backgroundSelected: '#DDE8DA',
+    card: '#FFFFFF',
+    border: '#DADFD6',
+    primary: '#2F7D4F',
+    onPrimary: '#FFFFFF',
+    danger: '#C0392B',
+    warning: '#B7791F',
   },
   dark: {
-    text: '#ffffff',
-    background: '#000000',
-    backgroundElement: '#212225',
-    backgroundSelected: '#2E3135',
-    textSecondary: '#B0B4BA',
+    text: '#ECEFEA',
+    textSecondary: '#A3ABA4',
+    background: '#111412',
+    backgroundElement: '#1C211E',
+    backgroundSelected: '#26402F',
+    card: '#181C19',
+    border: '#2C332E',
+    primary: '#5DBB82',
+    onPrimary: '#0B1A11',
+    danger: '#F0776A',
+    warning: '#E0B054',
   },
 } as const;
 
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 
 export const Fonts = Platform.select({
-  ios: {
-    /** iOS `UIFontDescriptorSystemDesignDefault` */
-    sans: 'system-ui',
-    /** iOS `UIFontDescriptorSystemDesignSerif` */
-    serif: 'ui-serif',
-    /** iOS `UIFontDescriptorSystemDesignRounded` */
-    rounded: 'ui-rounded',
-    /** iOS `UIFontDescriptorSystemDesignMonospaced` */
-    mono: 'ui-monospace',
-  },
   default: {
     sans: 'normal',
     serif: 'serif',
@@ -61,5 +56,10 @@ export const Spacing = {
   six: 64,
 } as const;
 
+export const Radius = {
+  small: 8,
+  medium: 12,
+  large: 20,
+} as const;
+
 export const BottomTabInset = Platform.select({ ios: 50, android: 80 }) ?? 0;
-export const MaxContentWidth = 800;
