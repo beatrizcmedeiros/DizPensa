@@ -41,7 +41,7 @@ export async function createProduct(input: NewProductInput, tx?: Transaction): P
 }
 
 /** Acha a variante (marca) do produto ou cria uma nova. */
-async function findOrCreateVariant(
+export async function findOrCreateVariant(
   tx: Transaction,
   householdId: string,
   productId: string,

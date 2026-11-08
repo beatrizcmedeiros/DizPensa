@@ -28,6 +28,7 @@ export default function HouseholdScreen() {
      WHERE household_id = ? ORDER BY role DESC, display_name`,
     [household.id],
   );
+  const myRole = members.find((m) => m.user_id === userId)?.role;
 
   async function saveName() {
     if (houseName.trim()) {
@@ -49,10 +50,60 @@ export default function HouseholdScreen() {
     if (error) Alert.alert('Sem conexão', 'Para trocar o código é preciso estar com internet.');
   }
 
-  function signOut() {
+  async function signOut() {
+    // Sair apaga os dados do aparelho. Se ainda há alterações que não subiram
+    // (ex.: sem internet), elas seriam perdidas.
+    const pending = await db.getUploadQueueStats();
+    if (pending.count > 0) {
+      Alert.alert(
+        'Alterações não enviadas',
+        `Há ${pending.count} alteração(ões) que ainda não foram para a nuvem. Se sair agora, elas serão perdidas. Conecte-se à internet e espere sincronizar antes de sair.`,
+        [
+          { text: 'Esperar', style: 'cancel' },
+          { text: 'Sair mesmo assim', style: 'destructive', onPress: () => supabase.auth.signOut() },
+        ],
+      );
+      return;
+    }
     Alert.alert('Sair da conta?', 'Os dados ficam salvos na nuvem e voltam quando você entrar de novo.', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'Sair', style: 'destructive', onPress: () => supabase.auth.signOut() },
+    ]);
+  }
+
+  function leaveHousehold() {
+    const others = members.filter((m) => m.user_id !== userId);
+    const isOnlyOwner = myRole === 'owner' && !others.some((m) => m.role === 'owner');
+    Alert.alert(
+      'Sair da casa?',
+      isOnlyOwner && others.length > 0
+        ? 'Você criou esta casa. Os outros membros continuam com acesso, mas ninguém mais poderá remover membros.'
+        : others.length === 0
+          ? 'Você é a única pessoa da casa. Os dados ficam guardados, mas só voltam se alguém entrar com o código.'
+          : 'Você deixa de ver esta despensa. Para voltar, precisa do código de convite.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Sair da casa',
+          style: 'destructive',
+          onPress: () =>
+            db.execute(`DELETE FROM household_members WHERE household_id = ? AND user_id = ?`, [
+              household.id,
+              userId,
+            ]),
+        },
+      ],
+    );
+  }
+
+  function removeMember(member: Member) {
+    Alert.alert(`Remover ${member.display_name}?`, 'A pessoa deixa de ver e editar esta despensa.', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Remover',
+        style: 'destructive',
+        onPress: () => db.execute(`DELETE FROM household_members WHERE id = ?`, [member.id]),
+      },
     ]);
   }
 
@@ -103,11 +154,16 @@ export default function HouseholdScreen() {
               {m.display_name}
               {m.user_id === userId ? ' (você)' : ''}
             </AppText>
-            <AppText type="small" themeColor="textSecondary">
-              {m.role === 'owner' ? 'criou a casa' : 'membro'}
-            </AppText>
+            {myRole === 'owner' && m.user_id !== userId ? (
+              <Button title="Remover" variant="ghost" onPress={() => removeMember(m)} />
+            ) : (
+              <AppText type="small" themeColor="textSecondary">
+                {m.role === 'owner' ? 'criou a casa' : 'membro'}
+              </AppText>
+            )}
           </View>
         ))}
+        <Button title="Sair da casa" variant="ghost" onPress={leaveHousehold} />
       </Card>
 
       <Button title="Categorias" variant="secondary" onPress={() => router.push('/categorias')} />

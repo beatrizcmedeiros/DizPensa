@@ -11,10 +11,19 @@ App Android (React Native + Expo) para controlar a despensa da casa, compartilha
 | Fase | Conteúdo | Situação |
 |---|---|---|
 | 1 | Login, casa compartilhada, despensa, cadastro manual, baixa, categorias, duração | **feita** |
-| 2 | Leitura do QR da NFC-e (MG), padronização de nomes com IA, tela de revisão | a fazer |
-| 3 | Ajustes de compartilhamento (sair da casa, remover membro) | a fazer |
-| 4 | Lista de compras, relatórios e filtros | a fazer |
+| 2 | Leitura do QR da NFC-e (MG), padronização de nomes com IA, tela de revisão, aba Compras | **feita** (falta testar com nota real) |
+| 3 | Sair da casa, remover membro, aviso ao sair com alterações não enviadas | **feita** |
+| 4 | Lista de compras, relatórios com filtros, histórico de preço | **feita** |
 | 5 | Publicação na Play Store | a fazer |
+
+## Leitura da nota fiscal
+
+1. O app lê o QR code (ou o link colado) e chama a função `nfce-import` no Supabase.
+2. A função busca a página da SEFAZ-MG, extrai loja, data, total e itens ([parse.ts](supabase/functions/nfce-import/parse.ts)).
+3. Para cada item, procura como a casa classificou essa mesma descrição antes (“memória”). Só os itens novos vão para a IA ([normalize.ts](supabase/functions/nfce-import/normalize.ts)), que devolve nome genérico, marca, categoria e se é por peso.
+4. O app mostra a revisão; ao confirmar, grava compra, itens, produtos, lotes e entradas no banco local.
+
+A IA usa a API do Claude e precisa do segredo `ANTHROPIC_API_KEY` na função (Supabase > Edge Functions > Secrets). Sem ele a leitura funciona, mas os nomes vêm como estão na nota.
 
 ## Como as coisas funcionam
 
@@ -29,15 +38,24 @@ App Android (React Native + Expo) para controlar a despensa da casa, compartilha
 src/app/                 telas (cada arquivo é uma rota)
   _layout.tsx            decide entre login / criar casa / app
   (tabs)/index.tsx       despensa
+  (tabs)/lista.tsx       lista de compras
+  (tabs)/compras.tsx     compras lançadas + ler nota
+  (tabs)/relatorios.tsx  gastos, mais comprados, consumo
   (tabs)/casa.tsx        casa, convite, membros, sair
+  nota/ler.tsx           câmera / link do QR code
+  nota/revisar.tsx       revisão dos itens da nota
+  compra/[id].tsx        detalhe de uma compra
   produto/novo.tsx       cadastro manual / entrada no estoque
-  produto/[id].tsx       detalhe, baixa, duração, preço, histórico
+  produto/[id].tsx       detalhe, baixa, duração, histórico de preço
   categorias.tsx
 src/lib/
   powersync/schema.ts    tabelas do banco local
   powersync/connector.ts envio das alterações para o Supabase
   stock.ts               regras de entrada e baixa
+  nfce.ts                leitura e gravação da nota
+  shopping.ts            lista de compras
 supabase/migrations/     SQL do banco na nuvem
+supabase/functions/      função que lê a nota (roda no Supabase, em Deno)
 powersync/sync-config.yaml  o que cada pessoa recebe na sincronização
 ```
 

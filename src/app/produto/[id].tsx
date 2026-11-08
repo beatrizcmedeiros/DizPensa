@@ -3,6 +3,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
+import { ColumnChart } from '@/components/charts';
 import { AppText, Button, Card, Chip, Loading, Screen, SectionTitle, TextField } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -83,6 +84,22 @@ export default function ProductScreen() {
        COUNT(*) AS times
      FROM purchase_items WHERE product_id = ?`,
     [id, id],
+  );
+  const { data: priceHistory } = useQuery<{
+    id: string;
+    purchased_at: string;
+    store_name: string | null;
+    brand: string | null;
+    unit_price: number;
+  }>(
+    `SELECT pi.id, pu.purchased_at, pu.store_name, v.brand, pi.unit_price
+     FROM purchase_items pi
+     JOIN purchases pu ON pu.id = pi.purchase_id
+     LEFT JOIN product_variants v ON v.id = pi.variant_id
+     WHERE pi.product_id = ? AND pi.unit_price IS NOT NULL
+     ORDER BY pu.purchased_at DESC
+     LIMIT 12`,
+    [id],
   );
 
   const product = products[0];
@@ -190,6 +207,28 @@ export default function ProductScreen() {
           <AppText themeColor="textSecondary" type="small">
             Média de {price.times} {price.times === 1 ? 'compra' : 'compras'}: {formatMoney(price.avg_price)}
           </AppText>
+          {priceHistory.length > 1 ? (
+            <ColumnChart
+              height={100}
+              format={(v) => `${formatMoney(v)}${isWeight ? '/kg' : '/un'}`}
+              data={[...priceHistory].reverse().map((p) => ({
+                key: p.id,
+                label: formatDate(p.purchased_at),
+                value: p.unit_price,
+                detail: [p.store_name, p.brand].filter(Boolean).join(' · ') || undefined,
+              }))}
+            />
+          ) : null}
+          {priceHistory.map((p) => (
+            <View key={p.id} style={styles.movement}>
+              <Text style={{ color: theme.textSecondary, flex: 1 }} numberOfLines={1}>
+                {formatDate(p.purchased_at)}
+                {p.store_name ? ` · ${p.store_name}` : ''}
+                {p.brand ? ` · ${p.brand}` : ''}
+              </Text>
+              <Text style={{ color: theme.text, fontWeight: '600' }}>{formatMoney(p.unit_price)}</Text>
+            </View>
+          ))}
         </Card>
       ) : null}
 

@@ -2,6 +2,7 @@ import { useStatus } from '@powersync/react-native';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { LogoIcon } from '@/components/logo';
 import { AppText, Button, Card, Chip, Loading, Screen, TextField } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { supabase } from '@/lib/supabase';
@@ -72,6 +73,7 @@ export default function NewHouseholdScreen() {
   return (
     <Screen style={styles.container}>
       <View style={{ gap: Spacing.two }}>
+        <LogoIcon size={64} />
         <AppText type="subtitle">Sua casa</AppText>
         <AppText themeColor="textSecondary">
           A despensa é compartilhada por todos da casa. Crie uma nova ou entre com o código que

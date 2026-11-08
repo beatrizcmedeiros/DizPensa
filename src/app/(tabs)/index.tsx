@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, SectionList, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LogoIcon, Wordmark } from '@/components/logo';
 import { AppText, Chip, TextField } from '@/components/ui';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
@@ -82,7 +83,10 @@ export default function PantryScreen() {
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.background }}>
       <View style={styles.header}>
-        <AppText type="subtitle">Despensa</AppText>
+        <View style={styles.brand}>
+          <LogoIcon size={36} />
+          <Wordmark size={26} />
+        </View>
         <TextField placeholder="Buscar produto" value={search} onChangeText={setSearch} />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
           {FILTERS.map((f) => (
@@ -198,6 +202,7 @@ const styles = StyleSheet.create({
     paddingTop: Spacing.three,
     gap: Spacing.two,
   },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two },
   chips: { gap: Spacing.two, paddingVertical: Spacing.one },
   sectionHeader: {
     fontSize: 13,

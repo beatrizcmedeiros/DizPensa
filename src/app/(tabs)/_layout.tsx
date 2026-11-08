@@ -17,6 +17,21 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon md="kitchen" />
       </NativeTabs.Trigger>
 
+      <NativeTabs.Trigger name="lista">
+        <NativeTabs.Trigger.Label>Lista</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="checklist" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="compras">
+        <NativeTabs.Trigger.Label>Compras</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="receipt_long" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="relatorios">
+        <NativeTabs.Trigger.Label>Relatórios</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon md="bar_chart" />
+      </NativeTabs.Trigger>
+
       <NativeTabs.Trigger name="casa">
         <NativeTabs.Trigger.Label>Casa</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="home" />

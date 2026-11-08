@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
+import { LogoIcon } from '@/components/logo';
 import { AppText, Button, Card, Screen, TextField } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { authErrorMessage } from '@/lib/auth-errors';
@@ -46,6 +47,7 @@ export default function SignUpScreen() {
   return (
     <Screen style={styles.container}>
       <View style={styles.header}>
+        <LogoIcon size={64} />
         <AppText type="subtitle">Criar conta</AppText>
       </View>
       <TextField
@@ -85,5 +87,5 @@ export default function SignUpScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'center' },
-  header: { marginBottom: Spacing.three },
+  header: { alignItems: 'center', gap: Spacing.two, marginBottom: Spacing.three },
 });

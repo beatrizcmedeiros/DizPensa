@@ -13,6 +13,8 @@ export const Colors = {
     onPrimary: '#FFFFFF',
     danger: '#C0392B',
     warning: '#B7791F',
+    // amarelo da tampa do pote na logo (um pouco mais escuro para ler no fundo claro)
+    accent: '#D9962A',
   },
   dark: {
     text: '#ECEFEA',
@@ -26,6 +28,7 @@ export const Colors = {
     onPrimary: '#0B1A11',
     danger: '#F0776A',
     warning: '#E0B054',
+    accent: '#F2B544',
   },
 } as const;
 

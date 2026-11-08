@@ -69,6 +69,9 @@ function RootNavigator() {
         <Stack.Screen name="produto/novo" options={{ headerShown: true, title: 'Adicionar produto' }} />
         <Stack.Screen name="produto/[id]" options={{ headerShown: true, title: 'Produto' }} />
         <Stack.Screen name="categorias" options={{ headerShown: true, title: 'Categorias' }} />
+        <Stack.Screen name="nota/ler" options={{ headerShown: true, title: 'Ler nota fiscal' }} />
+        <Stack.Screen name="nota/revisar" options={{ headerShown: true, title: 'Revisar compra' }} />
+        <Stack.Screen name="compra/[id]" options={{ headerShown: true, title: 'Compra' }} />
       </Stack.Protected>
     </Stack>
     </HouseholdProvider>

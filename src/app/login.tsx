@@ -2,7 +2,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Screen, TextField } from '@/components/ui';
+import { Logo } from '@/components/logo';
+import { Button, Screen, TextField } from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { authErrorMessage } from '@/lib/auth-errors';
 import { supabase } from '@/lib/supabase';
@@ -27,8 +28,7 @@ export default function LoginScreen() {
   return (
     <Screen style={styles.container}>
       <View style={styles.header}>
-        <AppText type="subtitle">DizPensa</AppText>
-        <AppText themeColor="textSecondary">Entre para ver e controlar o estoque da sua casa.</AppText>
+        <Logo />
       </View>
 
       <TextField
@@ -56,5 +56,5 @@ export default function LoginScreen() {
 
 const styles = StyleSheet.create({
   container: { flexGrow: 1, justifyContent: 'center' },
-  header: { gap: Spacing.two, marginBottom: Spacing.three },
+  header: { marginBottom: Spacing.four },
 });
