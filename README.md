@@ -23,7 +23,7 @@ App Android (React Native + Expo) para controlar a despensa da casa, compartilha
 3. Para cada item, procura como a casa classificou essa mesma descrição antes (“memória”). Só os itens novos vão para a IA ([normalize.ts](supabase/functions/nfce-import/normalize.ts)), que devolve nome genérico, marca, categoria e se é por peso.
 4. O app mostra a revisão; ao confirmar, grava compra, itens, produtos, lotes e entradas no banco local.
 
-A IA usa a API do Claude e precisa do segredo `ANTHROPIC_API_KEY` na função (Supabase > Edge Functions > Secrets). Sem ele a leitura funciona, mas os nomes vêm como estão na nota.
+A IA usa o Gemini (modelo `gemini-3.5-flash-lite`, definido em `normalize.ts`) e precisa do segredo `GEMINI_API_KEY` na função (Supabase > Edge Functions > Secrets). Sem ele a leitura funciona, mas os nomes vêm como estão na nota.
 
 ## Como as coisas funcionam
 

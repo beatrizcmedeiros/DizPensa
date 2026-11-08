@@ -133,11 +133,12 @@ Deno.serve(async (req) => {
     let aiResult = new Map<number, Normalized>();
     let aiAvailable = true;
     if (unknown.length > 0) {
-      if (!Deno.env.get('ANTHROPIC_API_KEY')) {
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) {
         aiAvailable = false;
       } else {
         try {
-          aiResult = await normalizeItems(unknown, categories ?? [], products ?? []);
+          aiResult = await normalizeItems(unknown, categories ?? [], products ?? [], geminiKey);
         } catch (e) {
           console.error('Falha na IA', e);
           aiAvailable = false;

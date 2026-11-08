@@ -1,6 +1,9 @@
-// Padronização dos nomes da nota com o Claude.
+// Padronização dos nomes da nota com o Gemini (Google).
 // "LEITE UHT INT ITALAC 1L" → produto "Leite integral", marca "Italac".
-import Anthropic from 'npm:@anthropic-ai/sdk@1.6.0';
+import { GoogleGenAI } from 'npm:@google/genai@3.0.0';
+
+/** Modelo estável, rápido e barato da linha Flash-Lite. */
+const MODEL = 'gemini-3.5-flash-lite';
 
 export type NormalizeInput = {
   index: number;
@@ -20,8 +23,6 @@ export type Normalized = {
 type Category = { id: string; name: string };
 type Product = { id: string; name: string; unit_type: string; category_id: string | null };
 
-const nullable = (schema: Record<string, unknown>) => ({ anyOf: [schema, { type: 'null' }] });
-
 const OUTPUT_SCHEMA = {
   type: 'object',
   properties: {
@@ -32,9 +33,9 @@ const OUTPUT_SCHEMA = {
         properties: {
           index: { type: 'integer' },
           product_name: { type: 'string' },
-          brand: nullable({ type: 'string' }),
-          existing_product_id: nullable({ type: 'string' }),
-          category_id: nullable({ type: 'string' }),
+          brand: { type: ['string', 'null'] },
+          existing_product_id: { type: ['string', 'null'] },
+          category_id: { type: ['string', 'null'] },
           unit_type: { type: 'string', enum: ['package', 'weight'] },
         },
         required: ['index', 'product_name', 'brand', 'existing_product_id', 'category_id', 'unit_type'],
@@ -44,7 +45,7 @@ const OUTPUT_SCHEMA = {
   },
   required: ['items'],
   additionalProperties: false,
-} as const;
+};
 
 const SYSTEM = `Você organiza a despensa de uma casa brasileira a partir de itens de notas fiscais de supermercado (NFC-e).
 As descrições vêm abreviadas e em maiúsculas, por exemplo "LEITE UHT INT ITALAC 1L" ou "PAO FRANCES KG".
@@ -62,11 +63,12 @@ export async function normalizeItems(
   items: NormalizeInput[],
   categories: Category[],
   products: Product[],
+  apiKey: string,
 ): Promise<Map<number, Normalized>> {
   const result = new Map<number, Normalized>();
   if (items.length === 0) return result;
 
-  const client = new Anthropic(); // lê ANTHROPIC_API_KEY dos segredos da função
+  const ai = new GoogleGenAI({ apiKey });
 
   const userContent = JSON.stringify({
     categorias: categories.map((c) => ({ id: c.id, nome: c.name })),
@@ -74,41 +76,38 @@ export async function normalizeItems(
     itens_da_nota: items.map((i) => ({ index: i.index, descricao: i.raw_description, unidade: i.unit })),
   });
 
-  const response = await client.beta.messages.create({
-    model: 'claude-opus-5-5',
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: {
-      effort: 'low',
-      format: { type: 'json_schema', schema: OUTPUT_SCHEMA },
+  const response = await ai.models.generateContent({
+    model: MODEL,
+    contents: userContent,
+    config: {
+      systemInstruction: SYSTEM,
+      responseMimeType: 'application/json',
+      responseJsonSchema: OUTPUT_SCHEMA,
     },
-    system: SYSTEM,
-    messages: [{ role: 'user', content: userContent }],
   });
 
-  if (response.stop_reason === 'refusal' || response.stop_reason === 'max_tokens') {
-    console.error('Padronização não concluída:', response.stop_reason);
+  const text = response.text;
+  if (!text) {
+    console.error('Gemini não devolveu texto:', response.candidates?.[0]?.finishReason);
     return result;
   }
 
-  const text = response.content.find((b) => b.type === 'text');
-  if (!text || text.type !== 'text') return result;
-
   let parsed: { items: Normalized[] };
   try {
-    parsed = JSON.parse(text.text);
+    parsed = JSON.parse(text);
   } catch (e) {
     console.error('Resposta da IA não é JSON válido', e);
     return result;
   }
+  if (!Array.isArray(parsed?.items)) return result;
 
   // Só aceitamos ids que existem de verdade nesta casa.
   const productIds = new Set(products.map((p) => p.id));
   const categoryIds = new Set(categories.map((c) => c.id));
   for (const item of parsed.items) {
+    if (typeof item?.index !== 'number' || typeof item.product_name !== 'string') continue;
     result.set(item.index, {
-      ...item,
+      index: item.index,
       product_name: item.product_name.trim(),
       brand: item.brand?.trim() || null,
       existing_product_id:
@@ -116,6 +115,7 @@ export async function normalizeItems(
           ? item.existing_product_id
           : null,
       category_id: item.category_id && categoryIds.has(item.category_id) ? item.category_id : null,
+      unit_type: item.unit_type === 'weight' ? 'weight' : 'package',
     });
   }
   return result;
