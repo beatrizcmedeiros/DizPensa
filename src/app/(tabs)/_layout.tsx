@@ -28,7 +28,7 @@ export default function TabsLayout() {
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="relatorios">
-        <NativeTabs.Trigger.Label>Relatórios</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Gastos</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon md="bar_chart" />
       </NativeTabs.Trigger>
 

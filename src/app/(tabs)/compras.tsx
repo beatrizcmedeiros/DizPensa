@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppText, Button } from '@/components/ui';
+import { AppText, Button, CategoryIcon, EmptyState, SectionTitle } from '@/components/ui';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDate, formatMoney } from '@/lib/format';
@@ -41,22 +41,30 @@ export default function PurchasesScreen() {
         ListHeaderComponent={
           <View style={{ gap: Spacing.three, marginBottom: Spacing.two }}>
             <AppText type="subtitle">Compras</AppText>
-            <Button title="Ler nota fiscal (QR code)" onPress={() => router.push('/nota/ler')} />
-            <Button title="Lançar produto manualmente" variant="secondary" onPress={() => router.push('/produto/novo')} />
+            <Button title="Ler nota fiscal" icon="qr_code_scanner" onPress={() => router.push('/nota/ler')} />
+            <Button
+              title="Digitar produto"
+              icon="edit_note"
+              variant="secondary"
+              onPress={() => router.push('/produto/novo')}
+            />
+            {purchases.length > 0 ? <SectionTitle>Compras anteriores</SectionTitle> : null}
           </View>
         }
         renderItem={({ item }) => (
           <Pressable
+            accessibilityRole="button"
             onPress={() => router.push({ pathname: '/compra/[id]', params: { id: item.id } })}
             style={({ pressed }) => [
               styles.item,
-              { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.85 : 1 },
+              { backgroundColor: pressed ? theme.backgroundElement : theme.card, borderColor: theme.border },
             ]}>
+            <CategoryIcon icon={item.source === 'nfce' ? 'receipt_long' : 'edit_note'} />
             <View style={{ flex: 1, gap: 2 }}>
               <Text style={[styles.title, { color: theme.text }]} numberOfLines={1}>
-                {item.store_name ?? (item.source === 'nfce' ? 'Nota fiscal' : 'Lançamento manual')}
+                {item.store_name ?? (item.source === 'nfce' ? 'Nota fiscal' : 'Digitado no app')}
               </Text>
-              <Text style={{ color: theme.textSecondary }}>
+              <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
                 {formatDate(item.purchased_at)} · {item.items} {item.items === 1 ? 'item' : 'itens'}
               </Text>
             </View>
@@ -64,9 +72,11 @@ export default function PurchasesScreen() {
           </Pressable>
         )}
         ListEmptyComponent={
-          <AppText themeColor="textSecondary" style={{ textAlign: 'center', padding: Spacing.four }}>
-            Nenhuma compra ainda. Leia o QR code da próxima nota do mercado.
-          </AppText>
+          <EmptyState
+            icon="receipt_long"
+            title="Nenhuma compra ainda"
+            body="Na próxima ida ao mercado, leia o QR code da nota e os produtos entram sozinhos na despensa."
+          />
         }
       />
     </SafeAreaView>

@@ -4,7 +4,18 @@ import { useMemo, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppText, Button, Card, Chip, Loading } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import {
+  AppText,
+  Button,
+  Card,
+  CategoryIcon,
+  Icon,
+  IconButton,
+  Loading,
+  OptionSheet,
+  Segmented,
+} from '@/components/ui';
 import { Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDate, formatMoney, formatQuantity, parseNumber } from '@/lib/format';
@@ -18,7 +29,7 @@ import {
 } from '@/lib/nfce';
 import type { UnitType } from '@/lib/powersync/schema';
 
-type Category = { id: string; name: string };
+type Category = { id: string; name: string; icon: string | null };
 type ProductOption = { id: string; name: string; unit_type: UnitType; category_id: string | null };
 
 type Row = ReviewedItem & { key: string; qtyText: string; source: string };
@@ -51,10 +62,12 @@ export default function ReviewReceiptScreen() {
     }),
   );
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [categoryFor, setCategoryFor] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
 
   const { data: categories } = useQuery<Category>(
-    `SELECT id, name FROM categories WHERE household_id = ? ORDER BY sort_order, name`,
+    `SELECT id, name, icon FROM categories WHERE household_id = ? ORDER BY sort_order, name`,
     [household.id],
   );
   const { data: products } = useQuery<ProductOption>(
@@ -66,6 +79,7 @@ export default function ReviewReceiptScreen() {
     [products],
   );
   const categoryName = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
+  const categoryIcon = useMemo(() => new Map(categories.map((c) => [c.id, c.icon])), [categories]);
 
   if (!receipt) return <Loading message="Nenhuma nota para revisar." />;
 
@@ -94,8 +108,9 @@ export default function ReviewReceiptScreen() {
     }
     setSaving(true);
     try {
-      await saveReceipt({ receipt: receipt!, items: rows, householdId: household.id, userId });
+      const saved = await saveReceipt({ receipt: receipt!, items: rows, householdId: household.id, userId });
       setPendingReceipt(null);
+      toast({ message: `${saved} ${saved === 1 ? 'item adicionado' : 'itens adicionados'} à despensa` });
       router.back();
     } catch (e) {
       console.error(e);
@@ -112,19 +127,20 @@ export default function ReviewReceiptScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={
           <Card style={{ marginBottom: Spacing.two }}>
-            <AppText type="smallBold">{receipt.store_name ?? 'Compra'}</AppText>
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>{receipt.store_name ?? 'Compra'}</Text>
             <AppText type="small" themeColor="textSecondary">
               {formatDate(receipt.purchased_at)} · {receipt.items.length} itens na nota
-              {receipt.total != null ? ` · ${formatMoney(receipt.total)}` : ''}
             </AppText>
+            {receipt.total != null ? (
+              <Text style={{ color: theme.text, fontSize: 24, fontWeight: '800' }}>{formatMoney(receipt.total)}</Text>
+            ) : null}
             {!receipt.ai_available ? (
-              <AppText type="small" themeColor="warning">
-                A IA não estava disponível: os nomes vieram como estão na nota. Você pode editá-los.
+              <AppText type="small" themeColor="warningText">
+                Os nomes vieram como estão na nota. Toque no lápis para deixá-los mais claros.
               </AppText>
             ) : null}
             <AppText type="small" themeColor="textSecondary">
-              Confira os itens. Toque em um item para trocar nome, categoria ou marca, ou tire o que
-              não é da casa.
+              Desmarque o que não é da casa. Toque no lápis para corrigir nome, quantidade ou categoria.
             </AppText>
           </Card>
         }
@@ -132,48 +148,61 @@ export default function ReviewReceiptScreen() {
           const isOpen = expanded === row.key;
           const linked = row.product_id != null;
           return (
-            <View
-              style={[
-                styles.item,
-                {
-                  backgroundColor: theme.card,
-                  borderColor: theme.border,
-                  opacity: row.include ? 1 : 0.5,
-                },
-              ]}>
-              <Pressable onPress={() => setExpanded(isOpen ? null : row.key)} style={{ gap: 2 }}>
-                <View style={styles.rowTop}>
-                  <Text style={[styles.name, { color: theme.text }]} numberOfLines={1}>
+            <View style={[styles.item, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={styles.rowTop}>
+                <Pressable
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: row.include }}
+                  accessibilityLabel={`Incluir ${row.product_name}`}
+                  onPress={() => update(row.key, { include: !row.include })}
+                  style={styles.checkHit}>
+                  <View
+                    style={[
+                      styles.check,
+                      {
+                        borderColor: row.include ? theme.primary : theme.border,
+                        backgroundColor: row.include ? theme.primary : 'transparent',
+                      },
+                    ]}>
+                    {row.include ? <Icon name="check" size={18} color={theme.onPrimary} /> : null}
+                  </View>
+                </Pressable>
+                <View style={{ flex: 1, gap: 2, opacity: row.include ? 1 : 0.5 }}>
+                  <Text
+                    style={[
+                      styles.name,
+                      { color: theme.text, textDecorationLine: row.include ? 'none' : 'line-through' },
+                    ]}
+                    numberOfLines={2}>
                     {row.product_name || 'Sem nome'}
                   </Text>
-                  <Text style={{ color: theme.text, fontWeight: '600' }}>{formatMoney(row.total_price)}</Text>
-                </View>
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }} numberOfLines={1}>
-                  {row.raw_description}
-                </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {formatQuantity(row.stock_quantity || 0, row.unit_type)}
-                  {row.brand ? ` · ${row.brand}` : ''}
-                  {row.category_id ? ` · ${categoryName.get(row.category_id) ?? ''}` : ''}
-                  {' · '}
-                  <Text style={{ color: linked ? theme.primary : theme.accent }}>
-                    {linked ? 'já na despensa' : 'produto novo'}
+                  <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                    {formatQuantity(row.stock_quantity || 0, row.unit_type)} · {formatMoney(row.total_price)}
+                    {row.brand ? ` · ${row.brand}` : ''}
                   </Text>
-                </Text>
-              </Pressable>
+                  <Text style={{ color: linked ? theme.primary : theme.accent, fontSize: 14, fontWeight: '600' }}>
+                    {linked ? 'Já tem na despensa' : `Novo${row.category_id ? ` · ${categoryName.get(row.category_id) ?? ''}` : ''}`}
+                  </Text>
+                </View>
+                <IconButton
+                  icon={isOpen ? 'expand_less' : 'edit'}
+                  label={isOpen ? 'Fechar edição' : `Editar ${row.product_name}`}
+                  onPress={() => setExpanded(isOpen ? null : row.key)}
+                  color={theme.textSecondary}
+                />
+              </View>
 
               {isOpen ? (
-                <View style={{ gap: Spacing.two, marginTop: Spacing.two }}>
-                  <LabeledInput label="Produto" value={row.product_name} onChangeText={(t) => rename(row, t)} />
+                <View style={{ gap: Spacing.three, marginTop: Spacing.two, paddingLeft: Spacing.three, paddingRight: Spacing.two }}>
+                  <Text style={{ color: theme.textSecondary, fontSize: 13 }}>Na nota: {row.raw_description}</Text>
+                  <LabeledInput label="Nome do produto" value={row.product_name} onChangeText={(t) => rename(row, t)} />
                   <View style={styles.inline}>
                     <View style={{ flex: 1 }}>
                       <LabeledInput
-                        label={row.unit_type === 'weight' ? 'Entra no estoque (kg)' : 'Entra no estoque (un)'}
+                        label={row.unit_type === 'weight' ? 'Quantidade (kg)' : 'Quantidade'}
                         value={row.qtyText}
                         keyboardType="decimal-pad"
-                        onChangeText={(t) =>
-                          update(row.key, { qtyText: t, stock_quantity: parseNumber(t) ?? 0 })
-                        }
+                        onChangeText={(t) => update(row.key, { qtyText: t, stock_quantity: parseNumber(t) ?? 0 })}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
@@ -186,41 +215,29 @@ export default function ReviewReceiptScreen() {
                   </View>
                   {!linked ? (
                     <>
-                      <AppText type="small" themeColor="textSecondary">
-                        Como contar
-                      </AppText>
-                      <View style={styles.wrap}>
-                        <Chip
-                          label="Embalagem"
-                          selected={row.unit_type === 'package'}
-                          onPress={() => update(row.key, { unit_type: 'package' })}
-                        />
-                        <Chip
-                          label="Peso (kg)"
-                          selected={row.unit_type === 'weight'}
-                          onPress={() => update(row.key, { unit_type: 'weight' })}
+                      <View style={{ gap: Spacing.one }}>
+                        <Text style={{ color: theme.textSecondary, fontSize: 13, fontWeight: '600' }}>Compro por</Text>
+                        <Segmented
+                          value={row.unit_type}
+                          onChange={(v) => update(row.key, { unit_type: v })}
+                          options={[
+                            { value: 'package', label: 'Unidade' },
+                            { value: 'weight', label: 'Peso (kg)' },
+                          ]}
                         />
                       </View>
-                      <AppText type="small" themeColor="textSecondary">
-                        Categoria
-                      </AppText>
-                      <View style={styles.wrap}>
-                        {categories.map((c) => (
-                          <Chip
-                            key={c.id}
-                            label={c.name}
-                            selected={row.category_id === c.id}
-                            onPress={() => update(row.key, { category_id: c.id })}
-                          />
-                        ))}
-                      </View>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => setCategoryFor(row.key)}
+                        style={[styles.picker, { borderColor: theme.border }]}>
+                        <CategoryIcon icon={categoryIcon.get(row.category_id ?? '') ?? null} size={32} />
+                        <Text style={{ color: theme.text, fontSize: 16, flex: 1 }}>
+                          {row.category_id ? categoryName.get(row.category_id) : 'Escolher categoria'}
+                        </Text>
+                        <Icon name="expand_more" size={22} color={theme.textSecondary} />
+                      </Pressable>
                     </>
                   ) : null}
-                  <Button
-                    title={row.include ? 'Não é da casa — tirar da compra' : 'Incluir de volta'}
-                    variant={row.include ? 'secondary' : 'primary'}
-                    onPress={() => update(row.key, { include: !row.include })}
-                  />
                 </View>
               ) : null}
             </View>
@@ -231,11 +248,25 @@ export default function ReviewReceiptScreen() {
       <View style={[styles.footer, { backgroundColor: theme.background, borderColor: theme.border }]}>
         <Button
           title={`Adicionar ${included.length} ${included.length === 1 ? 'item' : 'itens'} · ${formatMoney(total)}`}
+          icon="check"
           onPress={save}
           loading={saving}
           disabled={included.length === 0}
         />
       </View>
+
+      <OptionSheet
+        visible={categoryFor != null}
+        title="Categoria"
+        onClose={() => setCategoryFor(null)}
+        onSelect={(id) => categoryFor && update(categoryFor, { category_id: id })}
+        options={categories.map((c) => ({
+          key: c.id,
+          label: c.name,
+          icon: c.icon ?? 'category',
+          selected: rows.find((r) => r.key === categoryFor)?.category_id === c.id,
+        }))}
+      />
     </SafeAreaView>
   );
 }
@@ -258,11 +289,21 @@ function LabeledInput({
 }
 
 const styles = StyleSheet.create({
-  item: { borderWidth: 1, borderRadius: Radius.medium, padding: Spacing.three },
-  rowTop: { flexDirection: 'row', justifyContent: 'space-between', gap: Spacing.two },
-  name: { fontSize: 16, fontWeight: '600', flex: 1 },
+  item: { borderWidth: 1, borderRadius: Radius.medium, paddingVertical: Spacing.two, paddingRight: Spacing.one },
+  rowTop: { flexDirection: 'row', alignItems: 'center', gap: Spacing.one },
+  name: { fontSize: 17, fontWeight: '600' },
+  checkHit: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
+  check: { width: 26, height: 26, borderRadius: 7, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   inline: { flexDirection: 'row', gap: Spacing.two },
-  wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
-  input: { minHeight: 44, borderWidth: 1, borderRadius: Radius.small, paddingHorizontal: Spacing.two, fontSize: 15 },
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.three,
+    minHeight: 52,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.three,
+  },
+  input: { minHeight: 48, borderWidth: 1, borderRadius: Radius.small, paddingHorizontal: Spacing.three, fontSize: 16 },
   footer: { position: 'absolute', left: 0, right: 0, bottom: 0, padding: Spacing.three, borderTopWidth: 1 },
 });

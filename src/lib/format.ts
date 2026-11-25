@@ -19,7 +19,8 @@ export function formatQuantity(value: number, unitType: UnitType | string | null
     if (value > 0 && value < 1) return `${formatNumber(value * 1000, 0, 0)} g`;
     return `${formatNumber(value, 0, 3)} kg`;
   }
-  return `${formatNumber(value, 0, 2)} un`;
+  if (value === 0.5) return 'meia unidade';
+  return `${formatNumber(value, 0, 2)} ${value > 0 && value <= 1 ? 'unidade' : 'unidades'}`;
 }
 
 export function formatMoney(value: number | null | undefined): string {

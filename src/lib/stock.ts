@@ -129,10 +129,10 @@ export async function consume(params: {
   productId: string;
   quantity: number | 'all';
   note?: string;
-}): Promise<number> {
+}): Promise<ConsumeResult> {
   return db.writeTransaction(async (tx) => {
-    const lots = await tx.getAll<{ id: string; quantity_remaining: number }>(
-      `SELECT id, quantity_remaining FROM stock_lots
+    const lots = await tx.getAll<{ id: string; quantity_remaining: number; finished_at: string | null }>(
+      `SELECT id, quantity_remaining, finished_at FROM stock_lots
        WHERE product_id = ? AND quantity_remaining > 0
        ORDER BY entered_at ASC, created_at ASC`,
       [params.productId],
@@ -141,23 +141,52 @@ export async function consume(params: {
     let remaining = params.quantity === 'all' ? Infinity : round(params.quantity);
     let consumed = 0;
     const at = now();
+    const undo: ConsumeResult['undo'] = { lots: [], movementIds: [] };
 
     for (const lot of lots) {
       if (remaining <= 0) break;
       const take = round(Math.min(lot.quantity_remaining, remaining));
       const left = round(lot.quantity_remaining - take);
+      undo.lots.push({ id: lot.id, quantity_remaining: lot.quantity_remaining, finished_at: lot.finished_at });
       await tx.execute(
         `UPDATE stock_lots SET quantity_remaining = ?, finished_at = ? WHERE id = ?`,
         [left, left <= 0 ? at : null, lot.id],
       );
+      const movementId = randomUUID();
+      undo.movementIds.push(movementId);
       await tx.execute(
         `INSERT INTO stock_movements (id, household_id, product_id, lot_id, type, quantity, note, created_by, created_at)
          VALUES (?, ?, ?, ?, 'baixa', ?, ?, ?, ?)`,
-        [randomUUID(), params.householdId, params.productId, lot.id, take, params.note ?? null, params.userId, at],
+        [movementId, params.householdId, params.productId, lot.id, take, params.note ?? null, params.userId, at],
       );
       remaining = round(remaining - take);
       consumed = round(consumed + take);
     }
-    return consumed;
+    return { consumed, undo };
+  });
+}
+
+export type ConsumeResult = {
+  consumed: number;
+  /** O que é preciso para desfazer este consumo. */
+  undo: {
+    lots: { id: string; quantity_remaining: number; finished_at: string | null }[];
+    movementIds: string[];
+  };
+};
+
+/** Desfaz um consumo: devolve as quantidades aos lotes e apaga os movimentos. */
+export async function undoConsume(undo: ConsumeResult['undo']): Promise<void> {
+  await db.writeTransaction(async (tx) => {
+    for (const lot of undo.lots) {
+      await tx.execute(`UPDATE stock_lots SET quantity_remaining = ?, finished_at = ? WHERE id = ?`, [
+        lot.quantity_remaining,
+        lot.finished_at,
+        lot.id,
+      ]);
+    }
+    for (const id of undo.movementIds) {
+      await tx.execute(`DELETE FROM stock_movements WHERE id = ?`, [id]);
+    }
   });
 }

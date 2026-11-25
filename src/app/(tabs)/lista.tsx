@@ -3,7 +3,8 @@ import { useState } from 'react';
 import { Alert, FlatList, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AppText, Button, TextField } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import { AppText, Button, EmptyState, Icon, IconButton, TextField } from '@/components/ui';
 import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatQuantity, parseNumber } from '@/lib/format';
@@ -28,6 +29,7 @@ export default function ShoppingListScreen() {
   const { household, userId } = useHousehold();
   const [newItem, setNewItem] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const toast = useToast();
 
   const { data: items } = useQuery<ListItem>(
     `SELECT s.id, s.name, s.quantity, s.checked, s.product_id, p.unit_type, c.name AS category_name,
@@ -63,6 +65,20 @@ export default function ShoppingListScreen() {
     db.execute(`UPDATE shopping_list_items SET checked = ? WHERE id = ?`, [item.checked ? 0 : 1, item.id]);
   }
 
+  async function remove(item: ListItem) {
+    await db.execute(`DELETE FROM shopping_list_items WHERE id = ?`, [item.id]);
+    toast({
+      message: `${item.name} saiu da lista`,
+      actionLabel: 'Desfazer',
+      onAction: () =>
+        db.execute(
+          `INSERT INTO shopping_list_items (id, household_id, product_id, name, quantity, checked, created_by, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [item.id, household.id, item.product_id, item.name, item.quantity, item.checked, userId, new Date().toISOString()],
+        ),
+    });
+  }
+
   function setQuantity(item: ListItem, text: string) {
     db.execute(`UPDATE shopping_list_items SET quantity = ? WHERE id = ?`, [parseNumber(text), item.id]);
   }
@@ -93,8 +109,13 @@ export default function ShoppingListScreen() {
         contentContainerStyle={{ padding: Spacing.three, gap: Spacing.two, paddingBottom: BottomTabInset + Spacing.four }}
         ListHeaderComponent={
           <View style={{ gap: Spacing.three, marginBottom: Spacing.two }}>
-            <AppText type="subtitle">Lista de compras</AppText>
-            <Button title="Adicionar o que acabou" onPress={generate} />
+            <View style={styles.headerRow}>
+              <AppText type="subtitle" style={{ flex: 1 }}>
+                Lista de compras
+              </AppText>
+              {pending.length > 0 ? <IconButton icon="share" label="Compartilhar lista" onPress={share} /> : null}
+            </View>
+            <Button title="Adicionar o que acabou" icon="playlist_add" onPress={generate} />
             {message ? (
               <AppText type="small" themeColor="textSecondary">
                 {message}
@@ -103,78 +124,77 @@ export default function ShoppingListScreen() {
             <View style={styles.addRow}>
               <View style={{ flex: 1 }}>
                 <TextField
-                  placeholder="Adicionar item"
+                  placeholder="Escreva um item, ex.: sabão em pó"
                   value={newItem}
                   onChangeText={setNewItem}
                   onSubmitEditing={add}
                   returnKeyType="done"
+                  accessibilityLabel="Novo item da lista"
                 />
               </View>
-              <Button title="+" onPress={add} disabled={!newItem.trim()} style={{ width: 56 }} />
+              <Button title="" icon="add" onPress={add} disabled={!newItem.trim()} style={{ width: 52 }} />
             </View>
-            {pending.length > 0 ? (
-              <Button title="Compartilhar lista" variant="ghost" onPress={share} />
-            ) : null}
           </View>
         }
         renderItem={({ item }) => (
           <View
             style={[
               styles.item,
-              { backgroundColor: theme.card, borderColor: theme.border, opacity: item.checked ? 0.55 : 1 },
+              { backgroundColor: theme.card, borderColor: theme.border },
             ]}>
             <Pressable
               accessibilityRole="checkbox"
               accessibilityState={{ checked: !!item.checked }}
               accessibilityLabel={item.name}
               onPress={() => toggle(item)}
-              hitSlop={8}
-              style={[
-                styles.check,
-                {
-                  borderColor: item.checked ? theme.primary : theme.border,
-                  backgroundColor: item.checked ? theme.primary : 'transparent',
-                },
-              ]}>
-              {item.checked ? <Text style={{ color: theme.onPrimary, fontWeight: '800' }}>✓</Text> : null}
-            </Pressable>
-            <View style={{ flex: 1 }}>
-              <Text
+              style={styles.checkHit}>
+              <View
                 style={[
-                  styles.name,
-                  { color: theme.text, textDecorationLine: item.checked ? 'line-through' : 'none' },
+                  styles.check,
+                  {
+                    borderColor: item.checked ? theme.primary : theme.border,
+                    backgroundColor: item.checked ? theme.primary : 'transparent',
+                  },
                 ]}>
+                {item.checked ? <Icon name="check" size={18} color={theme.onPrimary} /> : null}
+              </View>
+            </Pressable>
+            <View style={{ flex: 1, opacity: item.checked ? 0.55 : 1 }}>
+              <Text
+                style={[styles.name, { color: theme.text, textDecorationLine: item.checked ? 'line-through' : 'none' }]}>
                 {item.name}
               </Text>
               {item.product_id ? (
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {item.in_stock ? `Tem ${formatQuantity(item.in_stock, item.unit_type ?? 'package')}` : 'Acabou'}
-                  {item.category_name ? ` · ${item.category_name}` : ''}
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                  {item.in_stock ? `Tem ${formatQuantity(item.in_stock, item.unit_type ?? 'package')} em casa` : 'Acabou em casa'}
                 </Text>
               ) : null}
             </View>
             <TextInput
               defaultValue={item.quantity ? String(item.quantity).replace('.', ',') : ''}
               onEndEditing={(e) => setQuantity(item, e.nativeEvent.text)}
-              placeholder="qtd"
+              placeholder="Qtd."
               placeholderTextColor={theme.textSecondary}
               keyboardType="decimal-pad"
               accessibilityLabel={`Quantidade de ${item.name}`}
               style={[styles.qty, { color: theme.text, borderColor: theme.border }]}
             />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`Remover ${item.name}`}
-              hitSlop={8}
-              onPress={() => db.execute(`DELETE FROM shopping_list_items WHERE id = ?`, [item.id])}>
-              <Text style={{ color: theme.textSecondary, fontSize: 20 }}>×</Text>
-            </Pressable>
+            <IconButton
+              icon="close"
+              label={`Tirar ${item.name} da lista`}
+              color={theme.textSecondary}
+              onPress={() => remove(item)}
+            />
           </View>
         )}
         ListEmptyComponent={
-          <AppText themeColor="textSecondary" style={{ textAlign: 'center', padding: Spacing.four }}>
-            Lista vazia. Toque em “Adicionar o que acabou” ou digite um item.
-          </AppText>
+          <EmptyState
+            icon="shopping_cart"
+            title="Sua lista está vazia"
+            body="Puxe o que acabou ou está acabando na despensa, ou escreva um item acima."
+            actionLabel="Adicionar o que acabou"
+            onAction={generate}
+          />
         }
         ListFooterComponent={
           done.length > 0 ? (
@@ -187,23 +207,25 @@ export default function ShoppingListScreen() {
 }
 
 const styles = StyleSheet.create({
+  headerRow: { flexDirection: 'row', alignItems: 'center' },
   addRow: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-start' },
   item: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.three,
+    gap: Spacing.one,
     borderWidth: 1,
     borderRadius: Radius.medium,
-    padding: Spacing.three,
+    paddingVertical: Spacing.one,
   },
+  checkHit: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
   check: {
     width: 26,
     height: 26,
-    borderRadius: 6,
+    borderRadius: 7,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  name: { fontSize: 16, fontWeight: '600' },
-  qty: { width: 56, height: 40, borderWidth: 1, borderRadius: Radius.small, textAlign: 'center' },
+  name: { fontSize: 17, fontWeight: '600' },
+  qty: { width: 60, height: 44, borderWidth: 1, borderRadius: Radius.small, textAlign: 'center', fontSize: 15 },
 });

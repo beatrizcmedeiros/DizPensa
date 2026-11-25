@@ -1,11 +1,11 @@
 import { useQuery } from '@powersync/react-native';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { BarList, ColumnChart, type BarDatum } from '@/components/charts';
-import { AppText, Card, Chip, Screen, SectionTitle } from '@/components/ui';
-import { BottomTabInset, Spacing } from '@/constants/theme';
+import { AppText, Card, Chip, Icon, OptionSheet, Screen, SectionTitle } from '@/components/ui';
+import { BottomTabInset, Radius, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatDays, formatMoney, formatQuantity } from '@/lib/format';
 import { useHousehold } from '@/lib/household';
@@ -48,6 +48,7 @@ export default function ReportsScreen() {
   const { household } = useHousehold();
   const [periodKey, setPeriodKey] = useState('6');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [categorySheet, setCategorySheet] = useState(false);
 
   const period = PERIODS.find((p) => p.key === periodKey)!;
   const since = periodStart(period.months);
@@ -55,8 +56,8 @@ export default function ReportsScreen() {
   const base = [household.id, since, categoryId, categoryId];
   const itemsFilter = `i.household_id = ? AND pu.purchased_at >= ? AND (? IS NULL OR p.category_id = ?)`;
 
-  const { data: categories } = useQuery<{ id: string; name: string }>(
-    `SELECT id, name FROM categories WHERE household_id = ? ORDER BY sort_order, name`,
+  const { data: categories } = useQuery<{ id: string; name: string; icon: string | null }>(
+    `SELECT id, name, icon FROM categories WHERE household_id = ? ORDER BY sort_order, name`,
     [household.id],
   );
 
@@ -144,7 +145,7 @@ export default function ReportsScreen() {
 
   return (
     <Screen edges={['top']} style={{ paddingBottom: BottomTabInset + Spacing.three }}>
-      <AppText type="subtitle">Relatórios</AppText>
+      <AppText type="subtitle">Gastos</AppText>
 
       <View style={{ gap: Spacing.two }}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
@@ -152,30 +153,30 @@ export default function ReportsScreen() {
             <Chip key={p.key} label={p.label} selected={p.key === periodKey} onPress={() => setPeriodKey(p.key)} />
           ))}
         </ScrollView>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-          <Chip label="Todas categorias" selected={!categoryId} onPress={() => setCategoryId(null)} />
-          {categories.map((c) => (
-            <Chip
-              key={c.id}
-              label={c.name}
-              selected={categoryId === c.id}
-              onPress={() => setCategoryId(categoryId === c.id ? null : c.id)}
-            />
-          ))}
-        </ScrollView>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setCategorySheet(true)}
+          style={[styles.picker, { borderColor: theme.border, backgroundColor: theme.card }]}>
+          <Icon name="tune" size={20} color={theme.textSecondary} />
+          <Text style={{ color: theme.text, fontSize: 15, flex: 1 }}>
+            {categories.find((c) => c.id === categoryId)?.name ?? 'Todas as categorias'}
+          </Text>
+          <Icon name="expand_more" size={22} color={theme.textSecondary} />
+        </Pressable>
       </View>
 
       <Card>
-        <SectionTitle>Gasto no período</SectionTitle>
+        <SectionTitle>Você gastou</SectionTitle>
         <Text style={[styles.hero, { color: theme.text }]}>{formatMoney(total)}</Text>
         {period.months !== 1 && total > 0 ? (
           <AppText type="small" themeColor="textSecondary">
-            Média de {formatMoney(total / monthsCount)} por mês
+            Em média {formatMoney(total / monthsCount)} por mês
           </AppText>
         ) : null}
         {total === 0 ? (
           <AppText type="small" themeColor="textSecondary">
-            Nenhuma compra com valor neste período. Leia notas fiscais ou informe o valor pago ao lançar produtos.
+            Nada registrado neste período. Os gastos aparecem quando você lê notas fiscais ou informa quanto pagou ao
+            adicionar um produto.
           </AppText>
         ) : null}
       </Card>
@@ -209,19 +210,18 @@ export default function ReportsScreen() {
 
       {top.length > 0 ? (
         <Card>
-          <SectionTitle>Mais comprados</SectionTitle>
+          <SectionTitle>O que você mais compra</SectionTitle>
           {top.map((t) => (
             <View key={t.id} style={styles.tableRow}>
               <View style={{ flex: 1 }}>
                 <Text
-                  style={{ color: theme.text, fontWeight: '600' }}
+                  style={{ color: theme.text, fontWeight: '600', fontSize: 16 }}
                   onPress={() => router.push({ pathname: '/produto/[id]', params: { id: t.id } })}>
                   {t.name}
                 </Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {t.times} {t.times === 1 ? 'compra' : 'compras'} · {formatQuantity(t.qty, t.unit_type)} ·{' '}
-                  média {formatMoney(t.qty > 0 ? t.spent / t.qty : null)}
-                  {t.unit_type === 'weight' ? '/kg' : '/un'}
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                  {t.times} {t.times === 1 ? 'vez' : 'vezes'} · em média {formatMoney(t.qty > 0 ? t.spent / t.qty : null)}{' '}
+                  {t.unit_type === 'weight' ? 'o kg' : 'cada'}
                 </Text>
               </View>
               <Text style={[styles.num, { color: theme.text }]}>{formatMoney(t.spent)}</Text>
@@ -232,13 +232,13 @@ export default function ReportsScreen() {
 
       {consumption.length > 0 ? (
         <Card>
-          <SectionTitle>Mais consumidos</SectionTitle>
+          <SectionTitle>O que mais acaba</SectionTitle>
           {consumption.map((c) => (
             <View key={c.id} style={styles.tableRow}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: theme.text, fontWeight: '600' }}>{c.name}</Text>
-                <Text style={{ color: theme.textSecondary, fontSize: 12 }}>
-                  {c.avg_days != null ? `dura em média ${formatDays(Math.round(c.avg_days))}` : 'ainda sem duração medida'}
+                <Text style={{ color: theme.text, fontWeight: '600', fontSize: 16 }}>{c.name}</Text>
+                <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+                  {c.avg_days != null ? `Dura em média ${formatDays(Math.round(c.avg_days))}` : 'Ainda sem duração medida'}
                 </Text>
               </View>
               <Text style={[styles.num, { color: theme.text }]}>{formatQuantity(c.consumed, c.unit_type)}</Text>
@@ -246,13 +246,38 @@ export default function ReportsScreen() {
           ))}
         </Card>
       ) : null}
+
+      <OptionSheet
+        visible={categorySheet}
+        title="Categoria"
+        onClose={() => setCategorySheet(false)}
+        onSelect={(key) => setCategoryId(key === 'all' ? null : key)}
+        options={[
+          { key: 'all', label: 'Todas as categorias', icon: 'apps', selected: !categoryId },
+          ...categories.map((c) => ({
+            key: c.id,
+            label: c.name,
+            icon: c.icon ?? 'category',
+            selected: c.id === categoryId,
+          })),
+        ]}
+      />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   chips: { gap: Spacing.two, paddingVertical: Spacing.one },
-  hero: { fontSize: 36, fontWeight: '800', fontVariant: ['tabular-nums'] },
+  picker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
+    minHeight: 48,
+    borderWidth: 1,
+    borderRadius: Radius.medium,
+    paddingHorizontal: Spacing.three,
+  },
+  hero: { fontSize: 32, fontWeight: '800', fontVariant: ['tabular-nums'] },
   tableRow: { flexDirection: 'row', alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.one },
   num: { fontWeight: '700', fontVariant: ['tabular-nums'] },
 });

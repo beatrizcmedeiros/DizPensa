@@ -4,7 +4,20 @@ import { useState } from 'react';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 
 import { ColumnChart } from '@/components/charts';
-import { AppText, Button, Card, Chip, Loading, Screen, SectionTitle, TextField } from '@/components/ui';
+import { useToast } from '@/components/toast';
+import {
+  AppText,
+  Button,
+  Card,
+  CategoryIcon,
+  Chip,
+  Loading,
+  Screen,
+  SectionTitle,
+  StatusBadge,
+  type StockStatus,
+  TextField,
+} from '@/components/ui';
 import { Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import {
@@ -19,7 +32,8 @@ import {
 import { useHousehold } from '@/lib/household';
 import { db } from '@/lib/powersync/db';
 import type { UnitType } from '@/lib/powersync/schema';
-import { consume } from '@/lib/stock';
+import { addListItem } from '@/lib/shopping';
+import { useConsume } from '@/lib/use-consume';
 
 type ProductDetail = {
   id: string;
@@ -28,6 +42,8 @@ type ProductDetail = {
   min_quantity: number;
   category_id: string | null;
   category_name: string | null;
+  category_icon: string | null;
+  in_list: number;
 };
 
 type Lot = {
@@ -51,11 +67,15 @@ export default function ProductScreen() {
   const theme = useTheme();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { household, userId } = useHousehold();
-  const [consumeQty, setConsumeQty] = useState('1');
+  const toast = useToast();
+  const consumeWithUndo = useConsume();
+  const [usedWeight, setUsedWeight] = useState('');
   const [editing, setEditing] = useState(false);
 
   const { data: products, isLoading } = useQuery<ProductDetail>(
-    `SELECT p.id, p.name, p.unit_type, p.min_quantity, p.category_id, c.name AS category_name
+    `SELECT p.id, p.name, p.unit_type, p.min_quantity, p.category_id, c.name AS category_name,
+            c.icon AS category_icon,
+            EXISTS (SELECT 1 FROM shopping_list_items s WHERE s.product_id = p.id AND s.checked = 0) AS in_list
      FROM products p LEFT JOIN categories c ON c.id = p.category_id
      WHERE p.id = ?`,
     [id],
@@ -119,88 +139,107 @@ export default function ProductScreen() {
   const oldestOpen = openLots[openLots.length - 1];
   const price = prices[0];
   const isWeight = product.unit_type === 'weight';
+  const inList = !!product.in_list;
 
-  async function doConsume(quantity: number | 'all') {
-    const done = await consume({ householdId: household.id, userId, productId: product.id, quantity });
-    if (done === 0) Alert.alert('Sem estoque', 'Não há nada em estoque para dar baixa.');
-    setConsumeQty(isWeight ? '' : '1');
+  const status: StockStatus =
+    inStock <= 0 ? 'acabou' : product.min_quantity > 0 && inStock <= product.min_quantity ? 'acabando' : 'tem';
+
+  async function use(quantity: number | 'all') {
+    await consumeWithUndo(product, quantity);
+    setUsedWeight('');
   }
 
-  function confirmAll() {
-    Alert.alert('Acabou tudo?', `Zerar o estoque de ${product.name}?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Zerar', style: 'destructive', onPress: () => doConsume('all') },
-    ]);
+  async function addToList() {
+    await addListItem({ householdId: household.id, userId, name: product.name, productId: product.id });
+    toast({ message: `${product.name} foi para a lista de compras` });
   }
 
   return (
     <Screen edges={['bottom']}>
       <Stack.Screen options={{ title: product.name }} />
 
-      <Card>
-        <AppText themeColor="textSecondary" type="small">
-          {product.category_name ?? 'Sem categoria'}
-        </AppText>
-        <Text style={[styles.big, { color: inStock > 0 ? theme.text : theme.danger }]}>
-          {inStock > 0 ? formatQuantity(inStock, product.unit_type) : 'Acabou'}
-        </Text>
-        {product.min_quantity > 0 ? (
-          <AppText themeColor="textSecondary" type="small">
-            Avisar abaixo de {formatQuantity(product.min_quantity, product.unit_type)}
-          </AppText>
-        ) : null}
+      <Card style={styles.hero}>
+        <CategoryIcon icon={product.category_icon} size={56} />
+        <View style={{ flex: 1, gap: 4 }}>
+          <Text style={{ color: theme.textSecondary, fontSize: 14 }}>{product.category_name ?? 'Sem categoria'}</Text>
+          {status === 'tem' ? (
+            <Text style={[styles.big, { color: theme.text }]}>{formatQuantity(inStock, product.unit_type)}</Text>
+          ) : (
+            <StatusBadge
+              status={status}
+              label={status === 'acabou' ? 'Acabou' : `Acabando · ${formatQuantity(inStock, product.unit_type)}`}
+            />
+          )}
+          {product.min_quantity > 0 ? (
+            <Text style={{ color: theme.textSecondary, fontSize: 14 }}>
+              Avisa quando tiver {formatQuantity(product.min_quantity, product.unit_type)} ou menos
+            </Text>
+          ) : null}
+        </View>
       </Card>
 
       {inStock > 0 ? (
         <Card>
-          <SectionTitle>Dar baixa</SectionTitle>
-          <View style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <TextField
-                value={consumeQty}
-                onChangeText={setConsumeQty}
-                keyboardType="decimal-pad"
-                placeholder={isWeight ? 'kg, ex.: 0,3' : '1'}
+          <SectionTitle>Usou?</SectionTitle>
+          {isWeight ? (
+            <View style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <TextField
+                  value={usedWeight}
+                  onChangeText={setUsedWeight}
+                  keyboardType="decimal-pad"
+                  placeholder="Quanto, em kg (ex.: 0,3)"
+                  accessibilityLabel="Quanto usou, em quilos"
+                />
+              </View>
+              <Button
+                title="Usei"
+                onPress={() => {
+                  const q = parseNumber(usedWeight);
+                  if (q && q > 0) use(q);
+                }}
               />
             </View>
-            <Button
-              title="Baixar"
-              onPress={() => {
-                const q = parseNumber(consumeQty);
-                if (q && q > 0) doConsume(q);
-              }}
-            />
-          </View>
-          <View style={styles.wrap}>
-            {!isWeight ? <Chip label="½ embalagem" onPress={() => doConsume(0.5)} /> : null}
-            <Chip label="Acabou tudo" onPress={confirmAll} />
-          </View>
+          ) : (
+            <View style={styles.row}>
+              <Button title="Usei 1" icon="remove" onPress={() => use(1)} style={{ flex: 1 }} />
+              <Button title="Usei metade" variant="secondary" onPress={() => use(0.5)} style={{ flex: 1 }} />
+            </View>
+          )}
+          <Button title="Acabou tudo" variant="ghost" onPress={() => use('all')} />
         </Card>
       ) : null}
 
-      <Button
-        title="Adicionar ao estoque"
-        variant="secondary"
-        onPress={() => router.push({ pathname: '/produto/novo', params: { productId: product.id } })}
-      />
+      <View style={styles.row}>
+        <Button
+          title="Comprei mais"
+          icon="add"
+          variant={inStock > 0 ? 'secondary' : 'primary'}
+          onPress={() => router.push({ pathname: '/produto/novo', params: { productId: product.id } })}
+          style={{ flex: 1 }}
+        />
+        {status !== 'tem' && !inList ? (
+          <Button title="Pôr na lista" icon="add_shopping_cart" variant="secondary" onPress={addToList} style={{ flex: 1 }} />
+        ) : null}
+      </View>
 
       <Card>
-        <SectionTitle>Duração</SectionTitle>
+        <SectionTitle>Quanto tempo dura</SectionTitle>
         <AppText>
           {avgDuration != null
-            ? `Em média dura ${formatDays(avgDuration)} (${finished.length} ${finished.length === 1 ? 'vez' : 'vezes'}).`
-            : 'Ainda não acabou nenhuma vez, então não sabemos quanto dura.'}
+            ? `Em média, ${formatDays(avgDuration)} (medido ${finished.length} ${finished.length === 1 ? 'vez' : 'vezes'}).`
+            : 'Ainda não acabou nenhuma vez. Quando acabar, o app mostra aqui quanto tempo durou.'}
         </AppText>
         {oldestOpen ? (
           <AppText themeColor="textSecondary" type="small">
-            O que está em uso entrou há {formatDays(daysBetween(oldestOpen.entered_at, new Date().toISOString()))}.
+            O que está em uso foi comprado há {formatDays(daysBetween(oldestOpen.entered_at, new Date().toISOString()))}.
           </AppText>
         ) : null}
       </Card>
 
       {price && price.times > 0 ? (
         <Card>
-          <SectionTitle>Preço</SectionTitle>
+          <SectionTitle>Quanto você pagou</SectionTitle>
           <AppText>
             Último: {formatMoney(price.last_price)} {isWeight ? 'por kg' : 'por unidade'}
           </AppText>
@@ -233,14 +272,14 @@ export default function ProductScreen() {
       ) : null}
 
       <Card>
-        <SectionTitle>Histórico</SectionTitle>
+        <SectionTitle>Últimas movimentações</SectionTitle>
         {movements.length === 0 ? (
-          <AppText themeColor="textSecondary">Sem movimentações.</AppText>
+          <AppText themeColor="textSecondary">Nada registrado ainda.</AppText>
         ) : (
           movements.map((m) => (
             <View key={m.id} style={styles.movement}>
-              <Text style={{ color: m.type === 'entrada' ? theme.primary : theme.text, fontWeight: '600' }}>
-                {m.type === 'entrada' ? '+' : '−'}
+              <Text style={{ color: m.type === 'entrada' ? theme.primary : theme.text, fontWeight: '600', fontSize: 15 }}>
+                {m.type === 'entrada' ? 'Comprou ' : 'Usou '}
                 {formatQuantity(m.quantity, product.unit_type)}
               </Text>
               <Text style={{ color: theme.textSecondary, flex: 1, textAlign: 'right' }}>
@@ -286,7 +325,7 @@ function EditProduct({ product, onDone }: { product: ProductDetail; onDone: () =
   function archive() {
     Alert.alert(
       'Remover produto?',
-      'Ele some da despensa, mas o histórico de compras continua nos relatórios.',
+      'Ele some da despensa, mas as compras dele continuam nos gastos.',
       [
         { text: 'Cancelar', style: 'cancel' },
         {
@@ -319,7 +358,8 @@ function EditProduct({ product, onDone }: { product: ProductDetail; onDone: () =
         ))}
       </View>
       <TextField
-        label="Avisar quando tiver menos que"
+        label="Avisar quando estiver acabando"
+        hint={`Com essa quantidade ou menos, aparece como “Acabando”${product.unit_type === 'weight' ? ' (em kg)' : ''}.`}
         value={minQty}
         onChangeText={setMinQty}
         keyboardType="decimal-pad"
@@ -332,7 +372,8 @@ function EditProduct({ product, onDone }: { product: ProductDetail; onDone: () =
 }
 
 const styles = StyleSheet.create({
-  big: { fontSize: 36, fontWeight: '700' },
+  big: { fontSize: 28, fontWeight: '800' },
+  hero: { flexDirection: 'row', alignItems: 'center', gap: Spacing.three },
   row: { flexDirection: 'row', gap: Spacing.two, alignItems: 'flex-start' },
   wrap: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.two },
   movement: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: Spacing.one },

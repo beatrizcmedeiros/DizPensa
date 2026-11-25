@@ -15,6 +15,16 @@ export const Colors = {
     warning: '#B7791F',
     // amarelo da tampa do pote na logo (um pouco mais escuro para ler no fundo claro)
     accent: '#D9962A',
+    // Selos de situação do estoque: fundo claro + texto escuro da mesma cor
+    successBg: '#E3F1E7',
+    successText: '#1E6B3E',
+    warningBg: '#FBEFD6',
+    warningText: '#7F530A',
+    dangerBg: '#FBE6E3',
+    dangerText: '#9E2A1F',
+    iconBg: '#E6F0E8',
+    toast: '#1B1F1C',
+    onToast: '#FFFFFF',
   },
   dark: {
     text: '#ECEFEA',
@@ -29,6 +39,15 @@ export const Colors = {
     danger: '#F0776A',
     warning: '#E0B054',
     accent: '#F2B544',
+    successBg: '#1D3826',
+    successText: '#8FD3A6',
+    warningBg: '#3B2D10',
+    warningText: '#F0C56B',
+    dangerBg: '#3F1B18',
+    dangerText: '#F59B91',
+    iconBg: '#20322A',
+    toast: '#ECEFEA',
+    onToast: '#111412',
   },
 } as const;
 

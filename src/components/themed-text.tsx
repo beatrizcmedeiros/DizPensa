@@ -28,17 +28,18 @@ const styles = StyleSheet.create({
   default: {
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: 500,
+    fontWeight: 400,
   },
   title: {
-    fontSize: 48,
-    fontWeight: 600,
-    lineHeight: 52,
+    fontSize: 28,
+    fontWeight: 700,
+    lineHeight: 34,
   },
+  // Título das telas: grande o bastante para orientar, sem ocupar meia tela.
   subtitle: {
-    fontSize: 32,
-    lineHeight: 44,
-    fontWeight: 600,
+    fontSize: 24,
+    lineHeight: 30,
+    fontWeight: 700,
   },
   link: {
     lineHeight: 30,

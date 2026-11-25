@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { useColorScheme } from 'react-native';
 
+import { ToastProvider } from '@/components/toast';
 import { Colors } from '@/constants/theme';
 import { HouseholdProvider, useCurrentHouseholdQuery } from '@/lib/household';
 import { db } from '@/lib/powersync/db';
@@ -31,7 +32,9 @@ export default function RootLayout() {
               border: colors.border,
             },
           }}>
-          <RootNavigator />
+          <ToastProvider>
+            <RootNavigator />
+          </ToastProvider>
         </ThemeProvider>
       </SessionProvider>
     </PowerSyncContext.Provider>
