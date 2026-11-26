@@ -45,15 +45,47 @@ export class ReceiptError extends Error {
   }
 }
 
-export async function fetchReceipt(url: string, householdId: string): Promise<Receipt> {
+/** Confere se o link é de uma NFC-e de Minas Gerais com chave de acesso. */
+export function isMgReceiptUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    return (
+      (url.hostname === 'portalsped.fazenda.mg.gov.br' || url.hostname === 'nfce.fazenda.mg.gov.br') &&
+      extractAccessKey(raw).length === 44
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Link da consulta no endereço atual da SEFAZ (o antigo foi desativado). */
+export function sefazUrl(raw: string): string {
+  const url = new URL(raw.trim());
+  url.protocol = 'https:';
+  url.hostname = 'portalsped.fazenda.mg.gov.br';
+  return url.toString();
+}
+
+/** true se essa nota já foi lançada nesta casa (consulta só o banco local). */
+export async function isReceiptSaved(url: string, householdId: string): Promise<boolean> {
   const local = await db.getOptional<{ id: string }>(
     `SELECT id FROM purchases WHERE household_id = ? AND access_key = ? LIMIT 1`,
     [householdId, extractAccessKey(url)],
   );
-  if (local) throw new ReceiptError('Essa nota já foi lançada na despensa.', 'duplicate');
+  return local != null;
+}
+
+/**
+ * Manda a página da nota (aberta no aparelho, em nota/sefaz) para a função
+ * nfce-import, que separa os itens e sugere o produto de cada um.
+ */
+export async function fetchReceipt(url: string, householdId: string, html: string): Promise<Receipt> {
+  if (await isReceiptSaved(url, householdId)) {
+    throw new ReceiptError('Essa nota já foi lançada na despensa.', 'duplicate');
+  }
 
   const { data, error } = await supabase.functions.invoke<Receipt>('nfce-import', {
-    body: { url, household_id: householdId },
+    body: { url, household_id: householdId, html },
   });
   if (error) {
     if (error instanceof FunctionsHttpError) {

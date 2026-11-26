@@ -3,15 +3,14 @@ import { router } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-import { AppText, Button, Card, Loading, Screen, TextField } from '@/components/ui';
+import { AppText, Button, Card, Screen, TextField } from '@/components/ui';
 import { Radius } from '@/constants/theme';
 import { useHousehold } from '@/lib/household';
-import { fetchReceipt, ReceiptError, setPendingReceipt } from '@/lib/nfce';
+import { isMgReceiptUrl, isReceiptSaved, sefazUrl } from '@/lib/nfce';
 
 export default function ScanReceiptScreen() {
   const { household } = useHousehold();
   const [permission, requestPermission] = useCameraPermissions();
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState('');
   const [showManual, setShowManual] = useState(false);
@@ -22,23 +21,19 @@ export default function ScanReceiptScreen() {
     if (busy.current) return;
     busy.current = true;
     setError(null);
-    setLoading(true);
-    try {
-      const receipt = await fetchReceipt(url, household.id);
-      setPendingReceipt(receipt);
-      router.replace('/nota/revisar');
-    } catch (e) {
-      setError(e instanceof ReceiptError ? e.message : 'Não foi possível ler a nota.');
-      setLoading(false);
-      // Espera um pouco antes de aceitar outra leitura, para não repetir o mesmo erro.
-      setTimeout(() => {
-        busy.current = false;
-      }, 1500);
+    if (!isMgReceiptUrl(url)) {
+      setError('Esse QR code não é de uma nota fiscal de Minas Gerais.');
+    } else if (await isReceiptSaved(url, household.id)) {
+      setError('Essa nota já foi lançada na despensa.');
+    } else {
+      // A SEFAZ pede uma verificação anti-robô, então a nota é aberta no aparelho.
+      router.replace({ pathname: '/nota/sefaz', params: { url: sefazUrl(url) } });
+      return;
     }
-  }
-
-  if (loading) {
-    return <Loading message="Lendo a nota na SEFAZ e organizando os produtos…" />;
+    // Espera um pouco antes de aceitar outra leitura, para não repetir o mesmo erro.
+    setTimeout(() => {
+      busy.current = false;
+    }, 2500);
   }
 
   return (

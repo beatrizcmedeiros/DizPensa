@@ -1,4 +1,5 @@
-// Recebe o link do QR code da NFC-e, lê a nota na SEFAZ de MG e devolve os
+// Recebe o link do QR code da NFC-e e a página da nota (aberta no aparelho,
+// porque a SEFAZ de MG pede uma verificação anti-robô) e devolve os
 // itens com uma sugestão de produto para cada um. Não grava nada: quem grava
 // é o app, depois que a pessoa revisa (assim funciona igual offline e online).
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
@@ -22,6 +23,9 @@ const json = (body: unknown, status = 200) =>
     headers: { 'Content-Type': 'application/json; charset=utf-8' },
   });
 
+/** A página da nota tem uns 100 KB; bem acima disso não é a página certa. */
+const MAX_HTML = 3_000_000;
+
 function titleCase(text: string): string {
   return text.toLowerCase().replace(/(^|\s)\p{L}/gu, (c) => c.toUpperCase());
 }
@@ -34,9 +38,15 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
 
   try {
-    const { url: rawUrl, household_id: householdId } = await req.json();
+    const { url: rawUrl, household_id: householdId, html } = await req.json();
     if (typeof rawUrl !== 'string' || typeof householdId !== 'string') {
       return json({ error: 'Envie url e household_id.' }, 400);
+    }
+    if (typeof html !== 'string' || html.length === 0 || html.length > MAX_HTML) {
+      return json(
+        { error: 'Atualize o app para ler notas: a SEFAZ mudou o jeito de consultar.', code: 'update_app' },
+        400,
+      );
     }
 
     // Cliente com o login de quem chamou: as regras de permissão do banco valem aqui.
@@ -53,7 +63,7 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (!household) return json({ error: 'Casa não encontrada.' }, 403);
 
-    const { url, accessKey } = validateMgUrl(rawUrl);
+    const { accessKey } = validateMgUrl(rawUrl);
 
     const { data: existing } = await supabase
       .from('purchases')
@@ -65,30 +75,21 @@ Deno.serve(async (req) => {
       return json({ error: 'Essa nota já foi lançada na despensa.', code: 'duplicate' }, 409);
     }
 
-    // Página da SEFAZ
-    let html: string;
-    try {
-      const res = await fetch(url, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36',
-          'Accept': 'text/html',
-          'Accept-Language': 'pt-BR,pt;q=0.9',
-        },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (!res.ok) throw new Error(`SEFAZ respondeu ${res.status}`);
-      html = await res.text();
-    } catch (e) {
-      console.error('Falha ao consultar a SEFAZ', e);
-      return json(
-        { error: 'O site da SEFAZ não respondeu. Tente de novo em alguns minutos.', code: 'sefaz_unavailable' },
-        502,
-      );
+    // A página tem que ser da mesma nota do QR code.
+    if (!html.replace(/\D/g, '').includes(accessKey)) {
+      return json({ error: 'A página aberta não é dessa nota. Tente ler o QR code de novo.', code: 'wrong_receipt' }, 422);
     }
 
     const receipt = parseReceiptHtml(html, accessKey);
     if (receipt.items.length === 0) {
-      console.error('Nenhum item encontrado. Tamanho do HTML:', html.length, 'trecho:', html.slice(0, 500));
+      // Trecho perto do primeiro item, para ajustar a leitura se a SEFAZ mudar a página.
+      const at = html.search(/Qtde/i);
+      console.error(
+        'Nenhum item encontrado. Tamanho do HTML:',
+        html.length,
+        'trecho:',
+        at >= 0 ? html.slice(Math.max(0, at - 800), at + 600) : '(sem "Qtde")',
+      );
       return json(
         {
           error: 'Não consegui ler os itens dessa nota. Às vezes a SEFAZ demora a liberar notas recentes; tente mais tarde.',
