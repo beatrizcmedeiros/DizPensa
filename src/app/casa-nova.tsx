@@ -32,8 +32,10 @@ export default function NewHouseholdScreen() {
           status.connected
             ? 'Sincronizando seus dados…'
             : 'Conectando… Na primeira vez é preciso estar com internet.'
-        }
-      />
+        }>
+        {/* Saída para não ficar preso aqui se o servidor não responder. */}
+        <Button title="Sair" variant="ghost" onPress={() => supabase.auth.signOut()} />
+      </Loading>
     );
   }
 

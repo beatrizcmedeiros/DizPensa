@@ -1,7 +1,8 @@
 import { type AndroidSymbol, SymbolView } from 'expo-symbols';
-import type { PropsWithChildren, ReactNode } from 'react';
+import { type PropsWithChildren, type ReactNode, useState } from 'react';
 import {
   ActivityIndicator,
+  KeyboardAvoidingView,
   Modal,
   Pressable,
   ScrollView,
@@ -42,7 +43,10 @@ export function Screen({
   );
   return (
     <SafeAreaView edges={edges} style={{ flex: 1, backgroundColor: theme.background }}>
-      {content}
+      {/* Encolhe a tela quando o teclado abre, para o campo em foco não ficar escondido. */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
+        {content}
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -109,25 +113,43 @@ export function TextField({
   hint,
   error,
   style,
+  secureTextEntry,
   ...props
 }: TextInputProps & { label?: string; hint?: string; error?: string | null }) {
   const theme = useTheme();
+  const [showPassword, setShowPassword] = useState(false);
   return (
     <View style={{ gap: Spacing.one }}>
       {label ? <Text style={[styles.label, { color: theme.textSecondary }]}>{label}</Text> : null}
-      <TextInput
-        placeholderTextColor={theme.textSecondary}
+      <View
         style={[
-          styles.input,
+          styles.inputRow,
           {
-            color: theme.text,
             backgroundColor: theme.card,
             borderColor: error ? theme.danger : theme.border,
           },
-          style,
-        ]}
-        {...props}
-      />
+        ]}>
+        <TextInput
+          placeholderTextColor={theme.textSecondary}
+          style={[styles.inputText, { color: theme.text }, style]}
+          secureTextEntry={secureTextEntry && !showPassword}
+          {...props}
+        />
+        {secureTextEntry ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? 'Esconder senha' : 'Mostrar senha'}
+            onPress={() => setShowPassword((v) => !v)}
+            hitSlop={8}
+            style={styles.inputAction}>
+            <Icon
+              name={showPassword ? 'visibility_off' : 'visibility'}
+              size={22}
+              color={theme.textSecondary}
+            />
+          </Pressable>
+        ) : null}
+      </View>
       {error ? (
         <Text style={[styles.hint, { color: theme.danger }]}>{error}</Text>
       ) : hint ? (
@@ -405,12 +427,13 @@ export function SectionTitle({ children }: PropsWithChildren) {
   return <Text style={[styles.sectionTitle, { color: theme.textSecondary }]}>{children}</Text>;
 }
 
-export function Loading({ message }: { message?: string }) {
+export function Loading({ message, children }: PropsWithChildren<{ message?: string }>) {
   const theme = useTheme();
   return (
     <View style={[styles.center, { backgroundColor: theme.background }]}>
       <ActivityIndicator color={theme.primary} size="large" />
       {message ? <Text style={{ color: theme.textSecondary, textAlign: 'center' }}>{message}</Text> : null}
+      {children}
     </View>
   );
 }
@@ -437,12 +460,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  input: {
+  inputRow: {
     minHeight: 48,
     borderWidth: 1,
     borderRadius: Radius.medium,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  inputText: {
+    flex: 1,
+    minHeight: 48,
     paddingHorizontal: Spacing.three,
     fontSize: 16,
+  },
+  inputAction: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   hint: {
     fontSize: 13,
