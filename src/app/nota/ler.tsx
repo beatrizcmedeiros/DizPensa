@@ -21,14 +21,19 @@ export default function ScanReceiptScreen() {
     if (busy.current) return;
     busy.current = true;
     setError(null);
-    if (!isMgReceiptUrl(url)) {
-      setError('Esse QR code não é de uma nota fiscal de Minas Gerais.');
-    } else if (await isReceiptSaved(url, household.id)) {
-      setError('Essa nota já foi lançada na despensa.');
-    } else {
-      // A SEFAZ pede uma verificação anti-robô, então a nota é aberta no aparelho.
-      router.replace({ pathname: '/nota/sefaz', params: { url: sefazUrl(url) } });
-      return;
+    try {
+      if (!isMgReceiptUrl(url)) {
+        setError('Esse QR code não é de uma nota fiscal de Minas Gerais.');
+      } else if (await isReceiptSaved(url, household.id)) {
+        setError('Essa nota já foi lançada na despensa.');
+      } else {
+        // A SEFAZ pede uma verificação anti-robô, então a nota é aberta no aparelho.
+        router.replace({ pathname: '/nota/sefaz', params: { url: sefazUrl(url) } });
+        return;
+      }
+    } catch (e) {
+      console.error('Falha ao abrir a nota', e);
+      setError('Não foi possível abrir essa nota. Tente de novo.');
     }
     // Espera um pouco antes de aceitar outra leitura, para não repetir o mesmo erro.
     setTimeout(() => {
